@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    仅对自建服务端放行明文 HTTP（占位符，请替换为你的服务端域名或 IP）。
+    其余域名仍走系统默认：HTTPS 严格校验、禁止明文。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">api.example.com</domain>
+    </domain-config>
+</network-security-config>

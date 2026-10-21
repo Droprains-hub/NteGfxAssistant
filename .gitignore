@@ -1,0 +1,30 @@
+# Gradle / Android 构建产物
+.gradle/
+.kotlin/
+build/
+app/build/
+*.iml
+
+# 本机环境与签名（永不入库）
+local.properties
+keystore/
+keystore.properties
+*.p12
+*.jks
+*.keystore
+
+# 内置 UE 配置（永不入库）
+config-src/
+app/src/main/assets/config/
+
+# IDE
+.idea/
+.DS_Store
+Thumbs.db
+
+# 运行期数据
+*.db
+*.log
+captures/
+.externalNativeBuild/
+.cxx/
