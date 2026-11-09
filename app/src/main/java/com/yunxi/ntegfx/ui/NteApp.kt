@@ -86,6 +86,7 @@ import com.yunxi.ntegfx.ui.theme.AuroraBackdrop
 import com.yunxi.ntegfx.ui.theme.BackdropStyle
 import com.yunxi.ntegfx.ui.theme.LocalNteFeatures
 import com.yunxi.ntegfx.ui.theme.LocalNteStyle
+import com.yunxi.ntegfx.ui.theme.NteAnimatedDialog
 import com.yunxi.ntegfx.ui.theme.NteTheme
 import com.yunxi.ntegfx.ui.theme.resolveDarkMode
 import kotlinx.coroutines.delay
@@ -100,7 +101,6 @@ import com.yunxi.ntegfx.ui.text.MarkdownText
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 
@@ -205,9 +205,8 @@ private fun GlobalPrompts(vm: AppViewModel) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     val update = vm.updateState
-    var seenNotice by remember { mutableStateOf<String?>(null) }
 
-    // 更新优先于公告：两者同时到达时只弹一个，避免叠层
+    // 更新优先于公告：两者同时到达只弹一个，避免叠层
     if (update is UpdateCheck.Available) {
         val info = update.info
         PromoDialog(
@@ -227,17 +226,30 @@ private fun GlobalPrompts(vm: AppViewModel) {
     }
 
     val notice = vm.announcement
-    if (notice != null && notice.id != seenNotice) {
-        val important = notice.forced || notice.level == "critical" || notice.level == "warning"
-        if (important) {
-            val close = { seenNotice = notice.id }
+    val unseen = notice != null && notice.id != vm.seenAnnouncementId
+
+    // 冷启动时首页还在铺首帧，公告立刻盖上来会显得很冲；
+    // 稍等一拍再淡入，视觉上有先后顺序。
+    var ready by remember(notice?.id, vm.seenAnnouncementId) { mutableStateOf(false) }
+    LaunchedEffect(notice?.id, vm.seenAnnouncementId) {
+        if (notice != null && notice.id != vm.seenAnnouncementId) {
+            kotlinx.coroutines.delay(450)
+            ready = true
+        } else {
+            ready = false
+        }
+    }
+
+    if (unseen && ready && notice != null) {
+        run {
+            val close = { vm.markAnnouncementSeen(notice.id) }
             PromoDialog(
                 icon = Icons.Filled.Info,
                 title = notice.title,
                 subtitle = null,
                 primaryText = notice.buttonText ?: strings.gotIt,
                 onPrimary = {
-                    seenNotice = notice.id
+                    vm.markAnnouncementSeen(notice.id)
                     notice.url?.let { launchUrl(context, it) }
                 },
                 secondaryText = if (notice.forced) null else strings.gotIt,
@@ -254,6 +266,7 @@ private fun GlobalPrompts(vm: AppViewModel) {
 /**
  * 推送类弹窗的统一样式：圆角卡片 + 圆形图标 + 标题区 + 可滚动正文 + 主次按钮。
  * 替代 Material 默认 AlertDialog，避免长标题挤压正文、按钮散落两角。
+ * 入场/退场动画由 [NteAnimatedDialog] 统一驱动，所有关闭路径先播退场再执行动作。
  */
 @Composable
 private fun PromoDialog(
@@ -268,7 +281,7 @@ private fun PromoDialog(
     onSecondary: (() -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
-    Dialog(onDismissRequest = { if (dismissible) onDismiss() }) {
+    NteAnimatedDialog(onDismiss = onDismiss, dismissible = dismissible) { close ->
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -317,7 +330,7 @@ private fun PromoDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (secondaryText != null && onSecondary != null) {
                         TextButton(
-                            onClick = onSecondary,
+                            onClick = { close(onSecondary) },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -325,7 +338,7 @@ private fun PromoDialog(
                         ) { Text(secondaryText, fontSize = 14.sp) }
                     }
                     Button(
-                        onClick = onPrimary,
+                        onClick = { close(onPrimary) },
                         modifier = Modifier
                             .weight(1.35f)
                             .height(46.dp),

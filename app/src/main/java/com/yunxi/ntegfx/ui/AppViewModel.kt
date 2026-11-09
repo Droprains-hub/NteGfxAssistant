@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.yunxi.ntegfx.BuildConfig
+import com.yunxi.ntegfx.NteGfxApp
 import com.yunxi.ntegfx.core.log.Logx
 import com.yunxi.ntegfx.core.net.Announcement
 import com.yunxi.ntegfx.core.net.AnnouncementResult
@@ -55,6 +56,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var checking by mutableStateOf(true)
         private set
     var applying by mutableStateOf(false)
+
+    /** ANF 补丁状态，配置页顶部的补丁开关据此显示。 */
+    var anfState by mutableStateOf<com.yunxi.ntegfx.core.root.AnfPatcher.Status?>(null)
+        private set
+
+    /**
+     * 本次会话内是否已成功应用过配置。
+     * 「启动游戏」以此为解锁条件：先应用、再启动，避免用户带着未写入的参数进游戏。
+     */
+    var appliedInSession by mutableStateOf(false)
         private set
     var resetting by mutableStateOf(false)
         private set
@@ -68,6 +79,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var announcementLoading by mutableStateOf(false)
         private set
+    /** 已读公告 ID，持久化到 DataStore，同一条只在第一次未读时弹窗。 */
+    var seenAnnouncementId by mutableStateOf<String?>(null)
+        private set
     var updateUpToDate by mutableStateOf(false)
         private set
     var updateState by mutableStateOf<UpdateCheck>(UpdateCheck.NotConfigured)
@@ -76,6 +90,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     val dirtyCount: Int get() = editing.diffFrom(baseline).size
+
+    /**
+     * 「启动游戏」的解锁条件：
+     * 没有未应用的改动即可启动——改过参数则必须先点「应用修改」，
+     * 否则用户会带着只存在于内存里的参数进游戏，看到的还是旧画面。
+     * appliedInSession 作为兜底：写入成功但 refresh 没跟上时也能解锁。
+     */
+    val canLaunchGame: Boolean
+        get() = snapshot?.installed == true &&
+            !applying &&
+            (dirtyCount == 0 || appliedInSession)
+
+    /** 拉起游戏；未安装或无启动入口时静默失败（按钮本身已按 installed 禁用）。 */
+    fun launchGame() {
+        val intent = runCatching {
+            getApplication<Application>().packageManager
+                .getLaunchIntentForPackage(channel.pkg)
+        }.getOrNull() ?: run {
+            message = "未找到游戏启动入口"
+            return
+        }
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { getApplication<Application>().startActivity(intent) }
+            .onFailure { message = "启动游戏失败：${it.message}" }
+    }
 
     val canEdit: Boolean
         get() = root.granted && snapshot?.state == com.yunxi.ntegfx.data.ConfigState.APPLIED
@@ -87,12 +126,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             api.baseUrl = settings.apiBaseUrl
             refresh().join()
             writeSessionSnapshot()
+            seenAnnouncementId = runCatching { prefs.seenAnnouncementId() }.getOrNull()
             loadAnnouncement()
             checkUpdate()
             reportTelemetry(
                 event = "app_launch",
                 result = if (root.granted) "root_ok" else "no_root",
             )
+            reportPendingCrash()
             prefs.settings.collect { updated ->
                 settings = updated
                 api.baseUrl = updated.apiBaseUrl
@@ -113,6 +154,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             baseline = snap.params ?: GfxParams()
             editing = baseline
             checking = false
+            anfState = withContext(Dispatchers.IO) { repo.anfStatus(channel) }
             if (snap.state == com.yunxi.ntegfx.data.ConfigState.UNKNOWN) {
                 message = "配置文件格式异常，建议先执行一键恢复"
             }
@@ -153,6 +195,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 result = if (result.success) "success" else "failure",
             )
             if (result.success) {
+                appliedInSession = true
                 onSuccess()
                 kotlinx.coroutines.delay(600)
                 applyProgress = ApplyProgress()
@@ -165,6 +208,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearApplyProgress() {
         applyProgress = ApplyProgress()
+    }
+
+    /** 供界面直接弹一条提示（例如未注入 ANF 补丁就点了开关）。 */
+    fun showMessage(text: String) {
+        message = text
+    }
+
+    /** 手动开关 ANF 补丁：开=写入补丁并 locked，关=还原原始字节。 */
+    fun setAnfPatch(enabled: Boolean) {
+        if (applying) return
+        viewModelScope.launch {
+            applying = true
+            val result = withContext(Dispatchers.IO) {
+                if (enabled) repo.patchAnf(channel) else repo.restoreAnfPatch(channel)
+            }
+            applying = false
+            message = result.message
+            anfState = withContext(Dispatchers.IO) { repo.anfStatus(channel) }
+            reportTelemetry(
+                event = if (enabled) "anf_patch_on" else "anf_patch_off",
+                result = if (result.success) "success" else "failure",
+            )
+        }
     }
 
     fun initializeConfig() {
@@ -205,8 +271,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 匿名上报：常开、失败静默，不阻塞任何本地流程。 */
-    private fun reportTelemetry(event: String, result: String? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
+    /** 补报上一次运行时的未捕获异常（堆栈已落在 crash-pending.txt）。 */
+    private fun reportPendingCrash() {
+        val marker = NteGfxApp.consumeCrashMarker(getApplication<Application>()) ?: return
+        Logx.w(Logx.Module.UI, "补报崩溃", marker.lineSequence().take(3).joinToString(" / "))
+        reportTelemetry(event = "crash", result = "fail")
+    }
+
+    private fun reportTelemetry(event: String, result: String? = null) {        viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val uid = prefs.deviceUid()
                 api.report(
@@ -236,6 +308,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             prefs.setLastUpdateCheck(System.currentTimeMillis())
             if (state is UpdateCheck.UpToDate && manual) updateUpToDate = true
         }
+    }
+
+    fun markAnnouncementSeen(id: String) {
+        if (seenAnnouncementId == id) return
+        seenAnnouncementId = id
+        viewModelScope.launch { runCatching { prefs.markAnnouncementSeen(id) } }
     }
 
     fun consumeUpToDate() {

@@ -1,11 +1,11 @@
 # 发布签名校验基准
-# 证书来源：用户提供的 落雨伴群星(1).key（与鸣潮画质助手发布签名一致）
 # 校验命令：apksigner verify --print-certs <apk>
+# 密钥文件与别名不随仓库分发，请使用自己的签名配置。
 
-cert_sha256=C0830DD975886EE25A53CAC50672A83498F8B38428FCD89641A79B646A107B
+cert_sha256=C0830DD975886EE25A53CAC50672A83498F8B38428FC8DED9641A79B646A107B
 cert_sha1=D73EEC6B65E1BBA51B9F6AB081E2B70678C9D66C
-key_alias=ntegfx
-keystore=keystore/ntegfx-release.p12
+key_alias=your_alias
+keystore=keystore/your-release.p12
 key_algorithm=RSA-2048
 cert_not_before=2024-07-06
 cert_not_after=2049-06-30

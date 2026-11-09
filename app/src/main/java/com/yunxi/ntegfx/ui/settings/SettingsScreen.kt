@@ -85,6 +85,7 @@ import com.yunxi.ntegfx.ui.theme.LocalNteDimens
 import com.yunxi.ntegfx.ui.theme.LocalNteExtra
 import com.yunxi.ntegfx.ui.theme.LocalNteStyle
 import com.yunxi.ntegfx.ui.theme.Stagger
+import com.yunxi.ntegfx.ui.theme.pressScale
 import com.yunxi.ntegfx.ui.text.Markdown
 import com.yunxi.ntegfx.ui.text.MarkdownText
 import java.io.File
@@ -96,6 +97,7 @@ import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.delay
 
 
+private const val URL_SOURCE_CODE = "https://github.com/Droprains-hub/NteGfxAssistant"
 private const val URL_EASTER_EGG = "https://ys.mihoyo.com/"
 
 @Composable
@@ -378,7 +380,7 @@ fun SettingsScreen(vm: AppViewModel) {
                         title = strings.sourceCode,
                         leading = Icons.Filled.Share,
                         chevron = true,
-                        onClick = { toast = strings.notConfigured },
+                        onClick = { openUrl(context, URL_SOURCE_CODE) },
                     )
                     DividerThin(startInset = 16.dp)
                     SettingRow(
@@ -463,7 +465,7 @@ private fun AboutHeader(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .pressScale(scaleDown = 0.98f, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

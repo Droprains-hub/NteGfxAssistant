@@ -1,5 +1,16 @@
 package com.yunxi.ntegfx.ui.onboarding
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +34,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,14 +59,16 @@ import com.yunxi.ntegfx.ui.components.PrimaryActionButton
 import com.yunxi.ntegfx.ui.text.RichBlock
 import com.yunxi.ntegfx.ui.text.RichPart
 import com.yunxi.ntegfx.ui.theme.LocalNteExtra
+import com.yunxi.ntegfx.ui.theme.NteAnimatedDialog
 import com.yunxi.ntegfx.ui.theme.Stagger
+import com.yunxi.ntegfx.ui.theme.rememberShake
 import java.util.Random
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
-import androidx.compose.ui.window.Dialog
 
 /** 开屏使用说明：窗口式卡片 + 同意勾选 + 初中难度验证。 */
 @Composable
@@ -62,6 +77,25 @@ fun OnboardingScreen(vm: AppViewModel) {
     val extra = LocalNteExtra.current
     var accepted by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }
+
+    // 首帧入场：卡片从略小、略低的位置浮现，与冷启动淡入错开半拍
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val enterAlpha by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(420, delayMillis = 90, easing = FastOutSlowInEasing),
+        label = "obEnterAlpha",
+    )
+    val enterScale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.94f,
+        animationSpec = spring(dampingRatio = 0.68f, stiffness = 380f),
+        label = "obEnterScale",
+    )
+    val enterRise by animateFloatAsState(
+        targetValue = if (entered) 0f else 26f,
+        animationSpec = tween(420, delayMillis = 90, easing = FastOutSlowInEasing),
+        label = "obEnterRise",
+    )
 
     Box(
         modifier = Modifier
@@ -72,13 +106,20 @@ fun OnboardingScreen(vm: AppViewModel) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
-                .fillMaxHeight(0.82f),
+                // 高度跟随内容：先给一个下限避免太扁，内容变多再滚动，不再固定占满 82%
+                .heightIn(min = 360.dp, max = 660.dp)
+                .graphicsLayer {
+                    alpha = enterAlpha
+                    scaleX = enterScale
+                    scaleY = enterScale
+                    translationY = enterRise
+                },
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             shadowElevation = 10.dp,
         ) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -101,7 +142,7 @@ fun OnboardingScreen(vm: AppViewModel) {
 
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 18.dp),
                 ) {
@@ -120,7 +161,20 @@ fun OnboardingScreen(vm: AppViewModel) {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(checked = accepted, onCheckedChange = { accepted = it })
+                            // 勾选时轻微弹跳，让「同意」这个动作有确认感
+                            val checkScale by animateFloatAsState(
+                                targetValue = if (accepted) 1.12f else 1f,
+                                animationSpec = spring(dampingRatio = 0.42f, stiffness = 640f),
+                                label = "obCheckBounce",
+                            )
+                            Checkbox(
+                                checked = accepted,
+                                onCheckedChange = { accepted = it },
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = checkScale
+                                    scaleY = checkScale
+                                },
+                            )
                             Text(
                                 text = strings.obAgree,
                                 style = MaterialTheme.typography.bodySmall,
@@ -241,6 +295,8 @@ private fun VerificationDialog(onPass: () -> Unit) {
     var challenge by remember { mutableStateOf(newChallenge()) }
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    var errorCount by remember { mutableIntStateOf(0) }
+    val shakeX = rememberShake(errorCount)
 
     fun submit() {
         val value = input.trim().toIntOrNull()
@@ -248,11 +304,12 @@ private fun VerificationDialog(onPass: () -> Unit) {
             onPass()
         } else {
             error = true
+            errorCount += 1
             input = ""
         }
     }
 
-    Dialog(onDismissRequest = { }) {
+    NteAnimatedDialog(onDismiss = { }, dismissible = false) { close ->
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
@@ -269,17 +326,27 @@ private fun VerificationDialog(onPass: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    text = if (challenge.expression.endsWith("?") || challenge.expression.endsWith("？")) {
-                        challenge.expression
-                    } else {
-                        "${challenge.expression} = ?"
+                // 换题时新旧题目交叉滑动，避免硬切
+                AnimatedContent(
+                    targetState = challenge,
+                    transitionSpec = {
+                        (fadeIn(tween(240)) + slideInHorizontally(tween(280)) { it / 3 } + scaleIn(tween(280), initialScale = 0.96f))
+                            .togetherWith(fadeOut(tween(140)) + slideOutHorizontally(tween(200)) { -it / 4 })
                     },
-                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                    label = "challengeSwap",
+                ) { current ->
+                    Text(
+                        text = if (current.expression.endsWith("?") || current.expression.endsWith("？")) {
+                            current.expression
+                        } else {
+                            "${current.expression} = ?"
+                        },
+                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     value = input,
@@ -293,7 +360,8 @@ private fun VerificationDialog(onPass: () -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(52.dp)
+                        .graphicsLayer { translationX = shakeX },
                 )
                 if (error) {
                     Text(
@@ -317,7 +385,7 @@ private fun VerificationDialog(onPass: () -> Unit) {
                         },
                     ) { Text(strings.verifyRefresh, style = MaterialTheme.typography.bodySmall) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { submit() }, enabled = input.isNotBlank()) {
+                    Button(onClick = { close { submit() } }, enabled = input.isNotBlank()) {
                         Text(strings.confirm)
                     }
                 }

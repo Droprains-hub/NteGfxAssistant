@@ -43,6 +43,10 @@ object ConfigSchema {
     const val SECTION_GAME_USER = "/Script/HTGame.HTGameUserSettings"
     const val SECTION_ENGINE = "/Script/Engine.RendererSettings"
     const val SECTION_SCALABILITY = "ScalabilityGroups"
+    const val SECTION_SETTING = "Setting"
+
+    /** 游戏自读的锐化强度，位于 GameUserSettings.ini 的 [Setting] 段；原值 0.1。 */
+    const val KEY_SHARPEN = "Graphics_Sharpen"
 
     const val KEY_FRAME_RATE = "FrameRateLimit"
     const val KEY_VSYNC = "bUseVSync"
@@ -51,6 +55,13 @@ object ConfigSchema {
     const val KEY_RES_X = "ResolutionSizeX"
     const val KEY_RES_Y = "ResolutionSizeY"
     const val KEY_QUALITY = "GraphicQualityLevel"
+
+    /**
+     * NPC / 车流密度。驱动 MassCrowd 与 MassTraffic 的生成比例
+     * （对应 `HTMassCrowdAudienceSpawnRatioByQuality`），游戏设置里的"交通系统"档位即此键。
+     * 它独立于画质预设，不受 `GraphicQualityLevel` 覆盖。
+     */
+    const val KEY_NPC_QUALITY = "NPCQuality"
     const val KEY_BRIGHTNESS = "BrightnessSetting"
     const val KEY_AA_METHOD = "MobileAAMethod"
 
@@ -67,6 +78,32 @@ object ConfigSchema {
     const val KEY_COLOR_MID = "r.Color.Mid"
     const val KEY_COLOR_MAX = "r.Color.Max"
 
+    /** 防伪标记键：非游戏 CVar，仅用于辨认"本工具生成"的文件。 */
+    const val KEY_MARKER = "Slate.YunxiIndices"
+
+    // ------------------------------------------------ ANF（AIFF 插件）
+
+    /** ANF 超分开关，属于 HTGameUserSettings 段。 */
+    const val KEY_ANF_SR = "bANFSR"
+
+    /** ANF 插帧开关，属于 HTGameUserSettings 段。 */
+    const val KEY_ANF_FRC = "bANFFRC"
+
+    /** ANF 的总闸门 CVar 所在段。游戏自身从不注册它，必须由外部 ini 造出来。 */
+    const val SECTION_CONSOLE_VARS = "ConsoleVariables"
+
+    /** 缺失时 SupportSR() 恒返回 0，UI 选项不会出现。 */
+    const val KEY_AIFF_ALLOWED = "r.AIFF.Runtime.Allowed"
+
+    /** 缺失时 ApplyANFSR() 会提前返回并把 bANFSR 写回 False。 */
+    const val KEY_AIFF_ENABLED = "r.AIFF.Enabled"
+
+    /** 全局渲染分辨率百分比。写进 [SECTION_CONSOLE_VARS] 作为设备档案之外的兜底。 */
+    const val KEY_R_SCREEN_PERCENT_GLOBAL = "r.ScreenPercentage"
+
+    /** 同上，作用于 GameViewport 的次级百分比。 */
+    const val KEY_R_SECONDARY_PERCENT_GLOBAL = "r.SecondaryScreenPercentage.GameViewport"
+
     const val FILE_GAME_USER = "GameUserSettings.ini"
     const val FILE_DEVICE = "DeviceProfiles.ini"
     const val FILE_ENGINE = "Engine.ini"
@@ -82,4 +119,19 @@ object ConfigSchema {
 
     /** DeviceProfiles 中需要全量同步的三组 CVar。 */
     val DEVICE_CVARS = listOf(KEY_CONTENT_SCALE, KEY_SECONDARY_PERCENT, KEY_R_SCREEN_PERCENT)
+
+    /**
+     * 本作 libUnreal.so 中查不到的 CVar。
+     * 原模板把它们写进了 DeviceProfiles 的每个机型段，实际不会生效，
+     * 应用时会从已有文件里剔除，避免继续发送无效配置。
+     */
+    val DEVICE_DEAD_CVARS = listOf(
+        "r.Shadow.PerObjectShadowMapResolution",
+        "r.TextureQuality",
+        "r.MaxTextureResolution",
+        "r.Mobile.EnableHighQualityMaterials",
+        "sg.Mobile.EnableHighQualityMaterials",
+        "r.imp.SSMbScaleLod0",
+        "r.imp.SSMbScaleLod1",
+    )
 }

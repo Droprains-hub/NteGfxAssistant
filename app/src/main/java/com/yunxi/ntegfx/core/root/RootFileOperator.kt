@@ -106,6 +106,22 @@ class RootFileOperator {
         )
     }
 
+    /**
+     * 目标应用是否正在运行。
+     *
+     * UE 游戏只在启动时读配置、退出时可能把内存值写回，
+     * 运行中改文件会被覆盖，必须要求用户先关闭游戏。
+     */
+    fun isProcessRunning(pkg: String): Boolean {
+        val q = Shell.quote(pkg)
+        // pidof 对超长进程名可能截断，再用 ps 兜底匹配命令行
+        val result = Shell.run(
+            "if pidof $q >/dev/null 2>&1 || ps -A 2>/dev/null | grep -qF $q; then echo 1; else echo 0; fi",
+            timeoutMs = 20_000,
+        )
+        return result.stdout.trim().startsWith("1")
+    }
+
     fun isDirectory(path: String): Boolean {
         val q = Shell.quote(path)
         val result = Shell.run("if [ -d $q ]; then echo 1; else echo 0; fi", timeoutMs = 20_000)
@@ -229,11 +245,29 @@ class RootFileOperator {
         val contextRef = if (existing.exists) target else "$dir/${ConfigSchema.FILE_GAME_USER}"
 
         val encoded = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        val write = exec(
-            "写入临时文件",
-            "printf '%s' '$encoded' | base64 -d > ${Shell.quote(tmp)}",
-            timeoutMs = 25_000,
-        )
+        // 不能把整份内容塞进一个 shell 参数：Linux 单参数上限约 128KB，
+        // 而 DeviceProfiles 密文化后 Base64 会到 200KB+，会直接 E2BIG。
+        // 按 4 的倍数切块（Base64 每 4 字符是独立三元组），首块覆盖、其余追加。
+        val chunks = encoded.chunked(24_000)
+        var write: OpStep
+        if (chunks.isEmpty()) {
+            write = exec("写入临时文件", "printf '' > ${Shell.quote(tmp)}", timeoutMs = 25_000)
+        } else {
+            chunks.forEachIndexed { index, chunk ->
+                val redirect = if (index == 0) ">" else ">>"
+                val step = exec(
+                    "写入临时文件",
+                    "printf '%s' '$chunk' | base64 -d $redirect ${Shell.quote(tmp)}",
+                    timeoutMs = 25_000,
+                )
+                steps += step
+                if (!step.ok) {
+                    exec("清理临时文件", "rm -f ${Shell.quote(tmp)}")
+                    return FileOpResult(false, steps, "写入临时文件失败")
+                }
+            }
+            write = steps.last()
+        }
         steps += write
         if (!write.ok) {
             exec("清理临时文件", "rm -f ${Shell.quote(tmp)}")

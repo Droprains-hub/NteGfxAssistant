@@ -1,4 +1,4 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 plugins {
@@ -22,9 +22,9 @@ android {
         applicationId = "com.yunxi.ntegfx"
         minSdk = 29
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.3.9"
-        resValue("string", "app_version_name", "1.3.1")
+        versionCode = 151
+        versionName = "1.5.1"
+        resValue("string", "app_version_name", "1.5.1")
         vectorDrawables { useSupportLibrary = true }
     }
 

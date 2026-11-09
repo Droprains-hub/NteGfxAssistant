@@ -1,6 +1,7 @@
 package com.yunxi.ntegfx.ui.theme
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -8,12 +9,16 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 
 /**
@@ -258,4 +264,104 @@ fun rotationFor(expanded: Boolean, degrees: Float = 180f): Float {
         label = "rotation",
     )
     return rotation
+}
+
+// ---------------------------------------------------------------- 弹窗动画容器
+
+/** 弹窗统一动效参数，各处弹窗保持一致体感。 */
+object NteDialogMotion {
+    const val ENTER_FADE = 220
+    const val ENTER_SCALE = 280
+    const val EXIT = 170
+    /** 退场动画时长上限，外部延迟回调按此对齐。 */
+    const val EXIT_SETTLE = 200
+}
+
+/**
+ * 带入场与退场动画的 Dialog 容器。
+ *
+ * Compose 的 Dialog 一旦离开组合窗口立即销毁，直接 `visible = false` 看不到退场；
+ * 因此这里用内部状态控制：先播退场，播完再执行真正的关闭动作。
+ *
+ * [content] 会拿到一个 `close` 函数，按钮调用 `close { 动作 }` 即可获得
+ * 「先动画退场、再执行业务动作」的效果。若动作并未把弹窗移出组合
+ * （例如只是跳转浏览器），容器会自动回到可见态，不会卡在空白窗口。
+ */
+@Composable
+fun NteAnimatedDialog(
+    onDismiss: () -> Unit,
+    dismissible: Boolean = true,
+    content: @Composable (close: (() -> Unit) -> Unit) -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val requestClose: (() -> Unit) -> Unit = { action ->
+        if (pendingAction == null) {
+            visible = false
+            pendingAction = action
+        }
+    }
+
+    Dialog(
+        onDismissRequest = { if (dismissible) requestClose(onDismiss) },
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(NteDialogMotion.ENTER_FADE, easing = FastOutSlowInEasing)) +
+                scaleIn(
+                    tween(NteDialogMotion.ENTER_SCALE, easing = FastOutSlowInEasing),
+                    initialScale = 0.92f,
+                ) +
+                slideInVertically(
+                    tween(NteDialogMotion.ENTER_SCALE, easing = FastOutSlowInEasing),
+                ) { it / 14 },
+            exit = fadeOut(tween(NteDialogMotion.EXIT - 30)) +
+                scaleOut(tween(NteDialogMotion.EXIT, easing = FastOutSlowInEasing), targetScale = 0.95f) +
+                slideOutVertically(tween(NteDialogMotion.EXIT, easing = FastOutSlowInEasing)) { it / 16 },
+        ) {
+            content(requestClose)
+        }
+    }
+
+    LaunchedEffect(pendingAction) {
+        val action = pendingAction ?: return@LaunchedEffect
+        delay(NteDialogMotion.EXIT_SETTLE.toLong())
+        action()
+        // 动作未把弹窗移出组合（如仅跳外链）：复位状态，弹窗淡回原位
+        if (pendingAction === action) {
+            pendingAction = null
+            visible = true
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 错误抖动
+
+/**
+ * 错误反馈抖动：每次 [trigger] 递增播放一次横向摆动，用于表单校验失败。
+ * 返回 px 偏移量，挂到 `graphicsLayer { translationX = ... }` 上使用。
+ */
+@Composable
+fun rememberShake(trigger: Int): Float {
+    val offset = remember { Animatable(0f) }
+    LaunchedEffect(trigger) {
+        if (trigger > 0) {
+            offset.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 380
+                    0f at 0
+                    (-13f) at 45
+                    11f at 100
+                    (-8f) at 155
+                    6f at 210
+                    (-3f) at 270
+                    0f at 380
+                },
+            )
+        }
+    }
+    return offset.value
 }

@@ -3,6 +3,7 @@ package com.yunxi.ntegfx.core.config
 import com.yunxi.ntegfx.data.AaMethod
 import com.yunxi.ntegfx.data.GfxParams
 import com.yunxi.ntegfx.data.ParamSpec
+import com.yunxi.ntegfx.data.ScalabilityGroup
 import java.util.Locale
 
 /**
@@ -65,17 +66,45 @@ object ConfigCodec {
         val mid = e?.get(ConfigSchema.KEY_COLOR_MID)?.toFloatOrNull()?.let(ParamSpec::clampMid) ?: 0.60f
         val max = e?.get(ConfigSchema.KEY_COLOR_MAX)?.toFloatOrNull()?.let(ParamSpec::clampMax) ?: 1.20f
 
+        // 锐化只认 [Setting] 段的 Graphics_Sharpen；旧配置缺键时回到游戏原值 0.1。
+        val sharpen = g?.get(ConfigSchema.KEY_SHARPEN, ConfigSchema.SECTION_SETTING)
+            ?.toFloatOrNull()
+            ?.let(ParamSpec::clampSharpen)
+            ?: 0.10f
+
+        // 自定义档位下逐项生效的分组值
+        val sg = ScalabilityGroup.entries.associateWith { grp ->
+            g?.get(grp.iniKey)?.toIntOrNull()?.coerceIn(0, 4) ?: 4
+        }
+
         return GfxParams(
             frameRateLimit = frameRate,
             useVSync = vsync,
             renderScale = scale,
             frameGeneration = frameGeneration,
+            sharpen = sharpen,
             colorMin = min,
             colorMid = mid,
             colorMax = max,
-            qualityPreset = g?.get(ConfigSchema.KEY_QUALITY)?.toIntOrNull()
-                ?.coerceIn(ParamSpec.QUALITY_PRESET_MIN, ParamSpec.QUALITY_PRESET_MAX) ?: 4,
+            // -1 是游戏自己的"自定义"标记：此时单项 sg.* 才生效，预设不再覆盖。
+            // 必须原样保留，不能 coerce 到 0，否则一应用就把画质打成"性能"。
+            qualityPreset = g?.get(ConfigSchema.KEY_QUALITY)?.toIntOrNull()?.coerceIn(-1, 4) ?: 4,
+            sgViewDistance = sg.getValue(ScalabilityGroup.VIEW_DISTANCE),
+            sgFoliage = sg.getValue(ScalabilityGroup.FOLIAGE),
+            sgTexture = sg.getValue(ScalabilityGroup.TEXTURE),
+            sgShading = sg.getValue(ScalabilityGroup.SHADING),
+            sgPostProcess = sg.getValue(ScalabilityGroup.POST_PROCESS),
+            sgReflection = sg.getValue(ScalabilityGroup.REFLECTION),
+            sgShadow = sg.getValue(ScalabilityGroup.SHADOW),
+            sgGlobalIllumination = sg.getValue(ScalabilityGroup.GI),
+            sgEffects = sg.getValue(ScalabilityGroup.EFFECTS),
+            sgLandscape = sg.getValue(ScalabilityGroup.LANDSCAPE),
+            npcQuality = g?.get(ConfigSchema.KEY_NPC_QUALITY)?.toIntOrNull()?.coerceIn(0, 4) ?: 3,
             antiAliasing = AaMethod.from(g?.get(ConfigSchema.KEY_AA_METHOD)),
+            // ANF 两个开关缺键时一律按"关闭"处理：它们需要 libUnreal.so 补丁才生效，
+            // 不能让未打补丁的用户被默认打开。
+            anfSr = g?.get(ConfigSchema.KEY_ANF_SR)?.toUeBool() ?: false,
+            anfFrc = g?.get(ConfigSchema.KEY_ANF_FRC)?.toUeBool() ?: false,
         )
     }
 
@@ -103,7 +132,12 @@ object ConfigCodec {
         doc.set(ConfigSchema.KEY_MFRC, bool(params.frameGeneration), anchor)
         doc.set(ConfigSchema.KEY_FSR_FG, bool(params.frameGeneration), anchor)
         doc.set(ConfigSchema.KEY_QUALITY, params.qualityPreset.toString(), anchor)
+        writeScalability(doc, params)
+        doc.set(ConfigSchema.KEY_NPC_QUALITY, params.npcQuality.toString(), anchor)
         doc.set(ConfigSchema.KEY_AA_METHOD, params.antiAliasing.iniValue, anchor)
+        doc.set(ConfigSchema.KEY_ANF_SR, bool(params.anfSr), anchor)
+        doc.set(ConfigSchema.KEY_ANF_FRC, bool(params.anfFrc), anchor)
+        doc.set(ConfigSchema.KEY_SHARPEN, trimFloat(params.sharpen), ConfigSchema.SECTION_SETTING)
 
         if (doc.get(ConfigSchema.KEY_RES_X, anchor) == null) {
             doc.set(ConfigSchema.KEY_RES_X, screenWidth.toString(), anchor)
@@ -123,11 +157,37 @@ object ConfigCodec {
         text = replaceCvar(text, ConfigSchema.KEY_CONTENT_SCALE, scale)
         text = replaceCvar(text, ConfigSchema.KEY_SECONDARY_PERCENT, percent)
         text = replaceCvar(text, ConfigSchema.KEY_R_SCREEN_PERCENT, percent)
-        return text
+        return stripDeadDeviceCvars(text)
     }
 
-    fun buildEngine(existing: String?, params: GfxParams): String {
-        val doc = if (existing != null && ConfigClassifier.isPlainText(existing)) {
+    /**
+     * 删掉在本作里查不到消费方的 CVar 行。
+     * 已有用户的 DeviceProfiles 是旧模板（每个机型段 12 条，其中 7 条无效），
+     * 应用时顺手清掉，不必让用户先「一键恢复」再重新初始化。
+     */
+    private fun stripDeadDeviceCvars(input: String): String {
+        var out = input
+        for (key in ConfigSchema.DEVICE_DEAD_CVARS) {
+            // 末行可能没有换行符，所以结尾允许用 $ 兜底
+            val pattern = Regex("(?m)^[ \\t]*CVars=" + Regex.escape(key) + "=.*(\\r?\\n|\\z)")
+            out = pattern.replace(out, "")
+        }
+        return out.replace(Regex("(\\r?\\n){3,}"), "\n\n")
+    }
+
+    /**
+     * 自定义档位（qualityPreset == -1）时，把 10 个分组写进 `[ScalabilityGroups]`。
+     * 预设档位下不写——写了也会被游戏用预设覆盖，反而让「应用后单项被重置」更容易发生。
+     */
+    private fun writeScalability(doc: IniDocument, params: GfxParams) {
+        if (params.qualityPreset >= 0) return
+        // 只写游戏界面里有对应入口的分组；无 UI 的几项先不动，等实测确认后再放开。
+        ScalabilityGroup.entries.filter { it.hasGameUi }.forEach { group ->
+            doc.set(group.iniKey, group.of(params).toString(), ConfigSchema.SECTION_SCALABILITY)
+        }
+    }
+
+    fun buildEngine(existing: String?, params: GfxParams): String {        val doc = if (existing != null && ConfigClassifier.isPlainText(existing)) {
             IniDocument.parse(existing)
         } else {
             IniDocument.parse(templateEngine(params))
@@ -136,7 +196,28 @@ object ConfigCodec {
         doc.set(ConfigSchema.KEY_COLOR_MIN, trimFloat(params.colorMin), anchor)
         doc.set(ConfigSchema.KEY_COLOR_MID, trimFloat(params.colorMid), anchor)
         doc.set(ConfigSchema.KEY_COLOR_MAX, trimFloat(params.colorMax), anchor)
+        applyAnfCvars(doc, params)
         return doc.toText()
+    }
+
+    /**
+     * ANF 的两条 CVar 是"能不能用"的总闸门，游戏自身从不注册它们（全库只有 Find 没有 Register），
+     * 只能靠 ini 造出来。关掉 ANF 时一并移除，让游戏界面里的选项随之消失。
+     */
+    private fun applyAnfCvars(doc: IniDocument, params: GfxParams) {
+        // 渲染分辨率也写进 [ConsoleVariables]：设备档案只在该机型被匹配到时才执行，
+        // 少数机型匹配不到就会完全失效；Engine.ini 是全局的，可作兜底。
+        val percent = ParamSpec.screenPercentage(params.renderScale).toString()
+        doc.set(ConfigSchema.KEY_R_SCREEN_PERCENT_GLOBAL, percent, ConfigSchema.SECTION_CONSOLE_VARS)
+        doc.set(ConfigSchema.KEY_R_SECONDARY_PERCENT_GLOBAL, percent, ConfigSchema.SECTION_CONSOLE_VARS)
+
+        if (params.anfSr || params.anfFrc) {
+            doc.set(ConfigSchema.KEY_AIFF_ALLOWED, "1", ConfigSchema.SECTION_CONSOLE_VARS)
+            doc.set(ConfigSchema.KEY_AIFF_ENABLED, "1", ConfigSchema.SECTION_CONSOLE_VARS)
+        } else {
+            doc.remove(ConfigSchema.KEY_AIFF_ALLOWED, ConfigSchema.SECTION_CONSOLE_VARS)
+            doc.remove(ConfigSchema.KEY_AIFF_ENABLED, ConfigSchema.SECTION_CONSOLE_VARS)
+        }
     }
 
     fun replaceCvar(text: String, key: String, value: String): String {
@@ -165,6 +246,7 @@ object ConfigCodec {
         deviceText = replaceCvar(deviceText, ConfigSchema.KEY_CONTENT_SCALE, trimFloat(params.renderScale))
         deviceText = replaceCvar(deviceText, ConfigSchema.KEY_SECONDARY_PERCENT, percent.toString())
         deviceText = replaceCvar(deviceText, ConfigSchema.KEY_R_SCREEN_PERCENT, percent.toString())
+        deviceText = stripDeadDeviceCvars(deviceText)
 
         val gDoc = IniDocument.parse(gameUser)
         val gAnchor = if (gDoc.hasSection(ConfigSchema.SECTION_GAME_USER)) {
@@ -181,7 +263,12 @@ object ConfigCodec {
         gDoc.set(ConfigSchema.KEY_MFRC, bool(params.frameGeneration), gAnchor)
         gDoc.set(ConfigSchema.KEY_FSR_FG, bool(params.frameGeneration), gAnchor)
         gDoc.set(ConfigSchema.KEY_QUALITY, params.qualityPreset.toString(), gAnchor)
+        writeScalability(gDoc, params)
+        gDoc.set(ConfigSchema.KEY_NPC_QUALITY, params.npcQuality.toString(), gAnchor)
         gDoc.set(ConfigSchema.KEY_AA_METHOD, params.antiAliasing.iniValue, gAnchor)
+        gDoc.set(ConfigSchema.KEY_ANF_SR, bool(params.anfSr), gAnchor)
+        gDoc.set(ConfigSchema.KEY_ANF_FRC, bool(params.anfFrc), gAnchor)
+        gDoc.set(ConfigSchema.KEY_SHARPEN, trimFloat(params.sharpen), ConfigSchema.SECTION_SETTING)
 
         val width = if (screenWidth > 0) screenWidth else 2780
         val height = if (screenHeight > 0) screenHeight else 1264
@@ -197,6 +284,7 @@ object ConfigCodec {
         eDoc.set(ConfigSchema.KEY_COLOR_MIN, trimFloat(params.colorMin), eAnchor)
         eDoc.set(ConfigSchema.KEY_COLOR_MID, trimFloat(params.colorMid), eAnchor)
         eDoc.set(ConfigSchema.KEY_COLOR_MAX, trimFloat(params.colorMax), eAnchor)
+        applyAnfCvars(eDoc, params)
 
         return Triple(gDoc.toText(), deviceText, eDoc.toText())
     }
@@ -217,6 +305,9 @@ object ConfigCodec {
             appendLine("${ConfigSchema.KEY_HWFG}=${bool(params.frameGeneration)}")
             appendLine("${ConfigSchema.KEY_MFRC}=${bool(params.frameGeneration)}")
             appendLine("${ConfigSchema.KEY_FSR_FG}=${bool(params.frameGeneration)}")
+            appendLine()
+            appendLine("[${ConfigSchema.SECTION_SETTING}]")
+            appendLine("${ConfigSchema.KEY_SHARPEN}=${trimFloat(params.sharpen)}")
         }
 
     fun templateDeviceProfiles(params: GfxParams): String {
@@ -231,8 +322,11 @@ object ConfigCodec {
 
     fun templateEngine(params: GfxParams): String = buildString {
         appendLine("[${ConfigSchema.SECTION_ENGINE}]")
-        appendLine("${ConfigSchema.KEY_COLOR_MAX}=${trimFloat(params.colorMax)}")
+        appendLine("${ConfigSchema.KEY_COLOR_MIN}=${trimFloat(params.colorMin)}")
         appendLine("${ConfigSchema.KEY_COLOR_MID}=${trimFloat(params.colorMid)}")
+        appendLine("${ConfigSchema.KEY_COLOR_MAX}=${trimFloat(params.colorMax)}")
+        // 防伪标记：走兜底模板时也必须带上，否则内置资源与兜底产物不一致
+        appendLine("${ConfigSchema.KEY_MARKER}=1")
     }
 
     // ---------------------------------------------------------------- 工具

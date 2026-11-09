@@ -80,11 +80,11 @@ class UiStrings(val english: Boolean) {
         )
 
     // 状态
-    val stateOriginal get() = t("当前为游戏原始配置", "Game defaults")
+    val stateOriginal get() = t("当前为游戏默认配置", "Game defaults")
     val stateApplied get() = t("配置已生效", "Applied")
-    val stateUnknown get() = t("配置格式异常", "Unexpected format")
+    val stateUnknown get() = t("配置异常", "Unexpected format")
     val stateNoRoot get() = t("需要 Root 权限", "Root required")
-    val emptyHint get() = t("未检测到配置文件，请先启动一次游戏", "No config found. Launch the game once first.")
+    val emptyHint get() = t("未检测到游戏文件，请先启动一次游戏", "No config found. Launch the game once first.")
 
     // 初始化
     val initTitle get() = t("尚未初始化", "Not initialized")
@@ -95,12 +95,12 @@ class UiStrings(val english: Boolean) {
     val initAction get() = t("初始化配置", "Initialize")
     val initConfirmTitle get() = t("开始初始化？", "Initialize now?")
     val initConfirmBody get() = t(
-        "将写入 GameUserSettings.ini、DeviceProfiles.ini、Engine.ini 三份文件并锁定为只读。已有明文配置不会被覆盖。",
+        "将对游戏配置文件进行处理。",
         "GameUserSettings.ini, DeviceProfiles.ini and Engine.ini will be written and locked read-only. Existing plain-text configs will not be overwritten.",
     )
-    val initDone get() = t("初始化完成，配置已写入并锁定", "Initialized. Configs written and locked.")
-    val rewriteConfig get() = t("重写配置文件", "Rewrite config files")
-    val initHintHome get() = t("尚未初始化，前往配置页完成初始化", "Not initialized yet. Go to Config to initialize.")
+    val initDone get() = t("初始化完成", "Initialized. Configs written and locked.")
+    val rewriteConfig get() = t("重置配置文件", "Rewrite config files")
+    val initHintHome get() = t("尚未初始化，前往配置页完成初始化后使用", "Not initialized yet. Go to Config to initialize.")
     val initRequired get() = t("完成初始化后才能调整参数", "Initialize before adjusting parameters")
 
     // 配置页
@@ -121,6 +121,23 @@ class UiStrings(val english: Boolean) {
     val supersample get() = t("超采样倍率", "Supersampling scale")
     val frameGeneration get() = t("帧生成", "Frame generation")
     val frameGenerationHint get() = t("同时控制 MEMC、硬件帧生成与 FSR 帧生成", "Controls MEMC, hardware frame generation and FSR together")
+    val anfPatch get() = t("ANF 补丁", "ANF patch")
+    val anfPatchNote get() = t("测试功能，部分设备无法使用。", "Test feature; may not work on some devices.")
+    val anfPatchRequired get() = t("ANF补丁未注入，请注入后使用", "Inject the ANF patch first")
+    val anfPatchMissing get() = t("未找到游戏库", "library not found")
+    val anfPatchUnsupported get() = t("该版本不支持", "unsupported build")
+    val anfPatchUnknown get() = t("状态未知", "unknown state")
+    val anfSr get() = t("ANF 超分", "ANF super resolution")
+    val anfSrHint get() = t("开启时游戏会自动关闭 ANF 插帧", "Requires the ANF patch; the game disables ANF frame generation while it is on")
+    val anfFrc get() = t("ANF 插帧", "ANF frame generation")
+    val npcQuality get() = t("交通系统", "Traffic / NPC density")
+    val sharpen get() = t("画面锐化", "Sharpening")
+    val tonePreset get() = t("色调预设", "Tone preset")
+    val tonePresetHelp get() = t(
+        "标准为游戏原版曲线；柔和抬升黑位、画面更平更亮；高对比压暗中间调、画面更通透；亮调整体提亮；暗调接近电影调色。",
+        "Applies a combination of the shadow, midtone and highlight anchors at once. Standard is the game's original curve. You can still fine-tune each anchor afterwards; the preset then shows as Custom.",
+    )
+    val tonePresetCustom get() = t("自定义", "Custom")
     val colorMid get() = t("中间调", "Midtones")
     val colorMin get() = t("暗部", "Shadows")
     val colorHigh get() = t("高光", "Highlights")
@@ -129,6 +146,9 @@ class UiStrings(val english: Boolean) {
     val brightnessHint get() = t("本项不修改游戏内亮度设置", "Does not change the in-game brightness setting")
     val confirmChanges get() = t("确认修改", "Confirm changes")
     val noChanges get() = t("暂无修改", "No changes")
+    val applyChanges get() = t("应用修改", "Apply")
+    val launchGame get() = t("启动游戏", "Launch")
+    val launchGameHint get() = t("先应用修改后才能启动", "Apply first to launch")
     val restoreDefaults get() = t("一键恢复", "Reset config")
     val custom get() = t("自定义", "Custom")
     val on get() = t("开", "On")
@@ -143,7 +163,7 @@ class UiStrings(val english: Boolean) {
     val groupGameSettings get() = t("游戏设置", "Game settings")
     val qualityPreset get() = t("画质预设", "Quality preset")
     val qualityPresetHelp get() = t(
-        "游戏自身的画质预设档位，从低到高共五档：性能、流畅、平衡、极致、原画。切换后会联动材质、植被、视距、后处理等全部子项，等同于在游戏「画面」页选择对应的整体档位。",
+        "游戏自身的画质预设档位，从低到高共五档：性能、流畅、平衡、极致、原画。切换后等同于在游戏「设置」页选择对应的整体档位。",
         "The game's overall quality preset, five levels from Performance to Original. Switching it drives material, foliage, view distance and post processing together, equivalent to the in-game graphics preset.",
     )
     val antiAliasing get() = t("抗锯齿", "Anti-aliasing")
@@ -154,6 +174,7 @@ class UiStrings(val english: Boolean) {
     val comingSoon get() = t("敬请期待", "Coming soon")
 
     fun qualityPresetName(level: Int): String = when (level) {
+        -1 -> t("自定义", "Custom")
         0 -> t("性能", "Performance")
         1 -> t("流畅", "Smooth")
         2 -> t("平衡", "Balanced")
@@ -161,12 +182,49 @@ class UiStrings(val english: Boolean) {
         else -> t("原画", "Original")
     }
 
+    /** NPC / 车流密度档位名，与游戏内单项设置的五档一致。 */
+    fun npcQualityName(level: Int): String = when (level) {
+        0 -> t("极低", "Lowest")
+        1 -> t("低", "Low")
+        2 -> t("中", "Medium")
+        3 -> t("高", "High")
+        else -> t("极致", "Highest")
+    }
+
+    /** 自定义档位下每个 sg.* 分组的名称。 */
+    fun sgLevelName(level: Int): String = npcQualityName(level)
+
+    fun sgGroupName(group: com.yunxi.ntegfx.data.ScalabilityGroup): String = when (group) {
+        com.yunxi.ntegfx.data.ScalabilityGroup.VIEW_DISTANCE -> t("视距", "View distance")
+        com.yunxi.ntegfx.data.ScalabilityGroup.FOLIAGE -> t("植被", "Foliage")
+        com.yunxi.ntegfx.data.ScalabilityGroup.TEXTURE -> t("贴图纹理", "Textures")
+        com.yunxi.ntegfx.data.ScalabilityGroup.SHADING -> t("材质", "Shading")
+        com.yunxi.ntegfx.data.ScalabilityGroup.POST_PROCESS -> t("后处理", "Post processing")
+        com.yunxi.ntegfx.data.ScalabilityGroup.REFLECTION -> t("反射", "Reflections")
+        com.yunxi.ntegfx.data.ScalabilityGroup.SHADOW -> t("阴影", "Shadows")
+        com.yunxi.ntegfx.data.ScalabilityGroup.GI -> t("全局光照", "Global illumination")
+        com.yunxi.ntegfx.data.ScalabilityGroup.EFFECTS -> t("特效", "Effects")
+        com.yunxi.ntegfx.data.ScalabilityGroup.LANDSCAPE -> t("地形", "Landscape")
+    }
+
+    val customQuality get() = t("自定义", "Custom")
+    val sgLevelSuffix get() = t("档", "level")
+
+    fun tonePresetName(preset: com.yunxi.ntegfx.data.TonePreset?): String = when (preset) {
+        com.yunxi.ntegfx.data.TonePreset.STANDARD -> t("标准", "Standard")
+        com.yunxi.ntegfx.data.TonePreset.SOFT -> t("柔和", "Soft")
+        com.yunxi.ntegfx.data.TonePreset.PUNCHY -> t("高对比", "Contrast")
+        com.yunxi.ntegfx.data.TonePreset.BRIGHT -> t("亮调", "Bright")
+        com.yunxi.ntegfx.data.TonePreset.CINEMATIC -> t("暗调", "Cinematic")
+        null -> tonePresetCustom
+    }
+
     // 应用确认
     val confirmApplyTitle get() = t("确认应用以下修改？", "Apply these changes?")
     val confirmApplyCountdown get() = t("%d 秒后可确认", "Available in %ds")
     val doNotAskAgain get() = t("不再提示", "Don't ask again")
     val applying get() = t("正在应用…", "Applying…")
-    val applySuccess get() = t("配置已生效并锁定", "Applied and locked")
+    val applySuccess get() = t("应用成功，请启动游戏", "Applied and locked")
     val applyFailed get() = t("应用失败", "Apply failed")
     val undoChangesTitle get() = t("有 %d 项修改尚未应用，是否放弃？", "%d unapplied changes. Discard them?")
     val unsavedTitle get() = t("尚未应用的修改", "Unapplied changes")
@@ -176,7 +234,7 @@ class UiStrings(val english: Boolean) {
     // 恢复
     val resetTitle get() = t("清空配置目录？", "Clear the config folder?")
     val resetBody get() = t(
-        "将清空配置目录内的所有文件，游戏下次启动时会重新生成。此操作不可撤销。",
+        "将清空配置目录内的所有文件，游戏下次启动时会重新生成，此操作不可撤销。",
         "This will delete every file in the config folder. The game will regenerate them on next launch. This cannot be undone.",
     )
     val resetRunning get() = t("正在清空…", "Clearing…")
@@ -185,8 +243,8 @@ class UiStrings(val english: Boolean) {
     fun stage(stage: com.yunxi.ntegfx.data.ApplyStage): String = when (stage) {
         com.yunxi.ntegfx.data.ApplyStage.VERIFY_ENV -> t("校验环境", "Verifying environment")
         com.yunxi.ntegfx.data.ApplyStage.WRITE_TEMP -> t("写入临时文件", "Writing temp file")
-        com.yunxi.ntegfx.data.ApplyStage.ATOMIC_REPLACE -> t("原子替换", "Replacing atomically")
-        com.yunxi.ntegfx.data.ApplyStage.LOCK -> t("只读锁定", "Locking read-only")
+        com.yunxi.ntegfx.data.ApplyStage.ATOMIC_REPLACE -> t("替换中", "Replacing atomically")
+        com.yunxi.ntegfx.data.ApplyStage.LOCK -> t("锁定", "Locking read-only")
         com.yunxi.ntegfx.data.ApplyStage.VERIFY_RESULT -> t("校验生效", "Verifying result")
         com.yunxi.ntegfx.data.ApplyStage.DONE -> t("完成", "Done")
         com.yunxi.ntegfx.data.ApplyStage.FAILED -> t("失败", "Failed")
@@ -299,7 +357,6 @@ class UiStrings(val english: Boolean) {
         )
 
     // 验证
-    val verifyTitle get() = t("安全验证", "Verification")
     val verifyHint get() = t("请计算下列算式，用于确认操作由真人完成", "Solve the expression below to continue")
     val verifyWrong get() = t("答案不正确，请重试", "Incorrect answer, try again")
     val verifyRefresh get() = t("换一题", "New question")
@@ -320,10 +377,15 @@ class UiStrings(val english: Boolean) {
         ParamKey.VSYNC -> vsync
         ParamKey.RENDER_SCALE -> renderResolution
         ParamKey.FRAME_GENERATION -> frameGeneration
+        ParamKey.ANF_SR -> anfSr
+        ParamKey.ANF_FRC -> anfFrc
+        ParamKey.SHARPEN -> sharpen
+        ParamKey.TONE_PRESET -> tonePreset
         ParamKey.COLOR_MIN -> colorMin
         ParamKey.COLOR_MID -> colorMid
         ParamKey.COLOR_MAX -> colorHigh
         ParamKey.QUALITY_PRESET -> qualityPreset
+        ParamKey.NPC_QUALITY -> npcQuality
         ParamKey.AA_METHOD -> antiAliasing
     }
 
@@ -337,15 +399,28 @@ class UiStrings(val english: Boolean) {
             "Aligns frame submission with the display refresh cycle to remove tearing. Frame output is throttled to the refresh rate; some devices or game builds ignore this switch.",
         )
         ParamKey.RENDER_SCALE -> t(
-            "设置游戏内部渲染分辨率相对屏幕物理分辨率的比例，可调 0.35×–3.5×。低于 1.0× 为降采样，能显著提升帧率但画面会变软；1.0× 为原生分辨率；高于 1.0× 为超采样，边缘与远景更锐利，GPU 光栅化负载近似按面积增长。",
+            "设置游戏内部渲染分辨率相对屏幕物理分辨率的比例，可调 0.35×–3.5×。低于 1.0× 为降采样，能显著提升帧率但画面会变模糊；1.0× 为原生分辨率；高于 1.0× 为超采样，边缘与远景更清晰，GPU 光栅化负载近似按面积增长。",
             "Scales the internal render resolution against the physical display, range 0.35×–3.5×. Below 1.0× renders fewer pixels for higher frame rate but looks softer; 1.0× is native; above 1.0× supersamples for sharper edges at higher GPU cost.",
         )
         ParamKey.FRAME_GENERATION -> t(
-            "同时接管 MEMC 运动补偿、硬件帧生成与 FSR 帧生成三项插帧技术。开启后可在相同渲染帧率下提升视觉流畅度，代价是增加约一帧的输入延迟，快速转向时可能出现轻微残影。",
+            "同时接管 MEMC 运动补偿、硬件帧生成与 FSR 帧生成三项插帧技术。开启后可在相同渲染帧率下提升视觉流畅度，代价是增加输入延迟，快速转向时可能出现残影。",
             "Drives MEMC, hardware frame generation and FSR together. Raises perceived smoothness at the same render rate, at the cost of roughly one frame of input latency and slight ghosting on fast turns.",
         )
+        ParamKey.ANF_SR -> t(
+            "开启时游戏会自动关闭 ANF 插帧，在不支持的硬件上打开上可能会起反效果",
+            "The game's built-in AI super resolution (AIFF SR). It lowers the render resolution and lets AIFF upscale it; measured GPU load drops by about 13%. It requires the ANF patch or the option never appears, it turns ANF frame generation off while active, and on non-target GPUs 3D detail ends up softer than native.",
+        )
+        ParamKey.ANF_FRC -> t(
+            "开启 ANF 超分后会被游戏自动关闭",
+            "The game's built-in AI frame generation (AIFF FRC), inserting generated frames between real ones. Also requires the ANF patch, and the game disables it whenever ANF SR is on. AIFF only recognises Adreno 840/845/850, so other GPUs may silently do nothing.",
+        )
+        ParamKey.SHARPEN -> t(
+            "游戏自带的锐化强度（Graphics_Sharpen），直接作用于最终成像的清晰度。",
+            "The game's built-in sharpening strength (Graphics_Sharpen), applied directly to the final image. Original is 0.1; raising it to 0.4–0.6 noticeably sharpens edges and distant detail. Higher values cause white halos and amplify noise. Start from 0.5 and fine-tune.",
+        )
+        ParamKey.TONE_PRESET -> tonePresetHelp
         ParamKey.COLOR_MIN -> t(
-            "调整色调映射曲线的暗部锚点，决定画面最暗区域的黑位。保持 0 可获得最深黑场与最强对比；提高会抬升暗部亮度、显出更多暗处细节，代价是整体发灰、通透感下降。",
+            "调整色调映射曲线的暗部锚点，决定画面最暗区域的黑位。提高会抬升暗部亮度、显出更多暗处细节，代价是整体发灰、通透感下降。",
             "Moves the black anchor of the tone mapping curve. Keep 0 for the deepest blacks and highest contrast; raising it lifts shadows and reveals more dark detail at the cost of a washed-out image.",
         )
         ParamKey.COLOR_MID -> t(
@@ -357,15 +432,25 @@ class UiStrings(val english: Boolean) {
             "Sets the highlight ceiling of the tone mapping curve. Higher values preserve more detail in skies and lights; too high washes the image out and spreads glare.",
         )
         ParamKey.QUALITY_PRESET -> qualityPresetHelp
+        ParamKey.NPC_QUALITY -> t(
+            "本工具会把游戏设置内的交通系统锁定，若在游戏里改这一项将无法保存，请在这里修改后重新应用。",
+            "Controls how densely the city spawns NPCs, pedestrians, traffic and MassTraffic vehicles (NPCQuality, which drives HTMassCrowdAudienceSpawnRatioByQuality). The five levels match the in-game option, and it is independent of the quality preset, so GraphicQualityLevel does not override it. Note: this tool locks the config read-only, so changing it inside the game will not persist — change it here and re-apply.",
+        )
         ParamKey.AA_METHOD -> antiAliasingHelp
     }
 
     fun formatParam(key: ParamKey, value: Float): String = when (key) {
         ParamKey.FRAME_RATE -> "${value.toInt()}"
-        ParamKey.VSYNC, ParamKey.FRAME_GENERATION -> if (value >= 0.5f) on else off
+        ParamKey.VSYNC, ParamKey.FRAME_GENERATION, ParamKey.ANF_SR, ParamKey.ANF_FRC ->
+            if (value >= 0.5f) on else off
         ParamKey.RENDER_SCALE -> com.yunxi.ntegfx.data.ParamSpec.scaleLabel(value)
-        ParamKey.COLOR_MIN, ParamKey.COLOR_MID, ParamKey.COLOR_MAX -> String.format(java.util.Locale.US, "%.2f", value)
+        ParamKey.SHARPEN,
+        ParamKey.TONE_PRESET,
+        ParamKey.COLOR_MIN,
+        ParamKey.COLOR_MID,
+        ParamKey.COLOR_MAX -> String.format(java.util.Locale.US, "%.2f", value)
         ParamKey.QUALITY_PRESET -> qualityPresetName(value.toInt())
+        ParamKey.NPC_QUALITY -> npcQualityName(value.toInt())
         ParamKey.AA_METHOD -> if (value < 0.5f) "GSR" else "TAA"
     }
 

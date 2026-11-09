@@ -3,11 +3,16 @@ package com.yunxi.ntegfx.ui.config
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,6 +47,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -69,12 +75,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunxi.ntegfx.core.root.AnfPatcher
 import com.yunxi.ntegfx.data.AaMethod
 import com.yunxi.ntegfx.data.ApplyStage
 import com.yunxi.ntegfx.data.Channel
 import com.yunxi.ntegfx.data.ConfigState
 import com.yunxi.ntegfx.data.ParamKey
 import com.yunxi.ntegfx.data.ParamSpec
+import com.yunxi.ntegfx.data.ScalabilityGroup
+import com.yunxi.ntegfx.data.TonePreset
 import com.yunxi.ntegfx.ui.AppViewModel
 import com.yunxi.ntegfx.ui.LocalStrings
 import com.yunxi.ntegfx.ui.components.DividerThin
@@ -108,7 +117,19 @@ fun ConfigScreen(vm: AppViewModel) {
     val installed = snapshot?.installed == true
     val initialized = snapshot?.state == ConfigState.APPLIED
 
+    val anfState = vm.anfState
+    val anfPatched = anfState?.state == AnfPatcher.State.PATCHED
+    val anfPatchUsable = anfState?.usable == true
+    val anfPatchSuffix = when {
+        anfState == null -> ""
+        anfState.state == AnfPatcher.State.MISSING -> " · " + strings.anfPatchMissing
+        anfState.state == AnfPatcher.State.UNSUPPORTED_BUILD -> " · " + strings.anfPatchUnsupported
+        anfState.state == AnfPatcher.State.UNKNOWN -> " · " + strings.anfPatchUnknown
+        else -> ""
+    }
+
     var expanded by remember { mutableStateOf<ParamKey?>(null) }
+    var expandedSg by remember { mutableStateOf<ScalabilityGroup?>(null) }
     var helpKey by remember { mutableStateOf<ParamKey?>(null) }
     var showServerSheet by remember { mutableStateOf(false) }
     var showServerHelp by remember { mutableStateOf(false) }
@@ -300,6 +321,87 @@ fun ConfigScreen(vm: AppViewModel) {
                             onHelp = { helpKey = ParamKey.FRAME_GENERATION },
                         )
                         DividerThin(startInset = 16.dp)
+                        // ANF 补丁总开关：补丁没打，游戏里连 ANF 两个选项都不会出现，
+                        // 所以要放在 ANF 设置上方。
+                        SwitchRow(
+                            title = strings.anfPatch + anfPatchSuffix,
+                            checked = anfPatched,
+                            enabled = canEdit && anfPatchUsable && !vm.applying,
+                            onCheckedChange = { vm.setAnfPatch(it) },
+                            onHelp = null,
+                        )
+                        // 测试功能提示：紧贴补丁开关下方的小红字
+                        Text(
+                            text = strings.anfPatchNote,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = extra.danger,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                        )
+                        DividerThin(startInset = 16.dp)
+                        SwitchRow(
+                            title = strings.anfSr,
+                            checked = params.anfSr,
+                            enabled = canEdit,
+                            onCheckedChange = { value ->
+                                if (!anfPatched) vm.showMessage(strings.anfPatchRequired)
+                                else vm.updateParams { it.copy(anfSr = value) }
+                            },
+                            onHelp = null,
+                        )
+                        DividerThin(startInset = 16.dp)
+                        SwitchRow(
+                            title = strings.anfFrc,
+                            checked = params.anfFrc,
+                            enabled = canEdit,
+                            onCheckedChange = { value ->
+                                if (!anfPatched) vm.showMessage(strings.anfPatchRequired)
+                                else vm.updateParams { it.copy(anfFrc = value) }
+                            },
+                            onHelp = null,
+                        )
+                        DividerThin(startInset = 16.dp)
+                        ParamRow(
+                            title = strings.sharpen,
+                            value = String.format(java.util.Locale.US, "%.2f", params.sharpen),
+                            enabled = canEdit,
+                            expanded = expanded == ParamKey.SHARPEN,
+                            onToggle = { expanded = if (expanded == ParamKey.SHARPEN) null else ParamKey.SHARPEN },
+                            onHelp = { helpKey = ParamKey.SHARPEN },
+                        ) {
+                            FloatEditor(
+                                value = params.sharpen,
+                                range = ParamSpec.SHARPEN_MIN..ParamSpec.SHARPEN_MAX,
+                                steps = 15,
+                                enabled = canEdit,
+                                onChange = { value -> vm.updateParams { it.copy(sharpen = value) } },
+                            )
+                        }
+                        DividerThin(startInset = 16.dp)
+                        ParamRow(
+                            title = strings.tonePreset,
+                            value = strings.tonePresetName(TonePreset.currentOf(params)),
+                            enabled = canEdit,
+                            expanded = expanded == ParamKey.TONE_PRESET,
+                            onToggle = { expanded = if (expanded == ParamKey.TONE_PRESET) null else ParamKey.TONE_PRESET },
+                            onHelp = { helpKey = ParamKey.TONE_PRESET },
+                        ) {
+                            OptionList(
+                                options = TonePreset.entries.map { strings.tonePresetName(it) },
+                                selected = TonePreset.entries.indexOf(TonePreset.currentOf(params)),
+                                enabled = canEdit,
+                                onSelect = { index ->
+                                    val preset = TonePreset.entries[index]
+                                    vm.updateParams {
+                                        it.copy(
+                                            colorMin = preset.colorMin,
+                                            colorMid = preset.colorMid,
+                                            colorMax = preset.colorMax,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                        DividerThin(startInset = 16.dp)
                         ParamRow(
                             title = strings.colorMin,
                             value = String.format(java.util.Locale.US, "%.2f", params.colorMin),
@@ -367,10 +469,56 @@ fun ConfigScreen(vm: AppViewModel) {
                         onHelp = { helpKey = ParamKey.QUALITY_PRESET },
                     ) {
                         OptionList(
-                            options = (0..4).map { strings.qualityPresetName(it) },
-                            selected = params.qualityPreset,
+                            options = listOf(strings.customQuality) +
+                                (0..4).map { strings.qualityPresetName(it) },
+                            selected = if (params.qualityPreset < 0) 0 else params.qualityPreset + 1,
                             enabled = canEdit,
-                            onSelect = { level -> vm.updateParams { it.copy(qualityPreset = level) } },
+                            onSelect = { index ->
+                                val level = if (index == 0) -1 else index - 1
+                                vm.updateParams { it.copy(qualityPreset = level) }
+                            },
+                        )
+                    }
+                    // 自定义档位：逐项暴露画质分组（只列游戏界面里有入口的，
+                    // 反射/阴影/GI 等无 UI 项先隐藏，等实测确认后再放开）
+                    if (params.qualityPreset < 0) {
+                        ScalabilityGroup.entries.filter { it.hasGameUi }.forEach { group ->
+                            DividerThin(startInset = 16.dp)
+                            ParamRow(
+                                title = strings.sgGroupName(group),
+                                value = strings.sgLevelName(group.of(params)),
+                                enabled = canEdit,
+                                expanded = expandedSg == group,
+                                onToggle = { expandedSg = if (expandedSg == group) null else group },
+                                onHelp = { expandedSg = group },
+                            ) {
+                                OptionList(
+                                    options = (0..4).map { strings.sgLevelName(it) },
+                                    selected = group.of(params),
+                                    enabled = canEdit,
+                                    onSelect = { level ->
+                                        vm.updateParams { current -> group.apply(current, level) }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    DividerThin(startInset = 16.dp)
+                    ParamRow(
+                        title = strings.npcQuality,
+                        value = strings.npcQualityName(params.npcQuality),
+                        enabled = canEdit,
+                        expanded = expanded == ParamKey.NPC_QUALITY,
+                        onToggle = {
+                            expanded = if (expanded == ParamKey.NPC_QUALITY) null else ParamKey.NPC_QUALITY
+                        },
+                        onHelp = null,
+                    ) {
+                        OptionList(
+                            options = (0..4).map { strings.npcQualityName(it) },
+                            selected = params.npcQuality,
+                            enabled = canEdit,
+                            onSelect = { level -> vm.updateParams { it.copy(npcQuality = level) } },
                         )
                     }
                     DividerThin(startInset = 16.dp)
@@ -428,7 +576,16 @@ fun ConfigScreen(vm: AppViewModel) {
                 )
                 .padding(horizontal = dimens.pagePadding, vertical = 12.dp),
         ) {
-            if (!initialized) {
+            // 初始化按钮与应用/启动双按钮之间平滑交接，不再瞬切
+            AnimatedContent(
+                targetState = initialized,
+                transitionSpec = {
+                    (fadeIn(tween(240)) + slideInVertically(tween(300)) { it / 3 })
+                        .togetherWith(fadeOut(tween(150)) + slideOutVertically(tween(200)) { -it / 4 })
+                },
+                label = "bottomAction",
+            ) { isInitialized ->
+            if (!isInitialized) {
                 PrimaryActionButton(
                     text = strings.initAction,
                     enabled = installed && vm.root.granted,
@@ -436,6 +593,7 @@ fun ConfigScreen(vm: AppViewModel) {
                     onClick = { vm.initializeConfig() },
                 )
             } else {
+                Column {
                 AnimatedVisibility(
                     visible = vm.dirtyCount > 0,
                     enter = fadeIn(tween(200)) + expandVertically(tween(240)),
@@ -448,14 +606,58 @@ fun ConfigScreen(vm: AppViewModel) {
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
-                PrimaryActionButton(
-                    text = if (vm.dirtyCount > 0) strings.confirmChanges else strings.noChanges,
-                    enabled = canEdit && vm.dirtyCount > 0,
-                    loading = vm.applying,
-                    onClick = {
-                        if (vm.settings.skipCountdown) vm.applyConfig() else showApplyDialog = true
-                    },
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            if (vm.settings.skipCountdown) vm.applyConfig() else showApplyDialog = true
+                        },
+                        enabled = canEdit && vm.dirtyCount > 0 && !vm.applying,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        // 转圈与文字交叉淡换，宽度稳定不跳动
+                        AnimatedContent(
+                            targetState = vm.applying,
+                            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                            label = "applyBtnContent",
+                        ) { busy ->
+                            if (busy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            } else {
+                                Text(strings.applyChanges, fontSize = 15.sp)
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { vm.launchGame() },
+                        enabled = vm.canLaunchGame && !vm.applying,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text(
+                            text = strings.launchGame,
+                            fontSize = 15.sp,
+                            color = if (vm.canLaunchGame) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
+                        )
+                    }
+                }
+                }
+            }
             }
         }
 
@@ -492,27 +694,30 @@ fun ConfigScreen(vm: AppViewModel) {
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
-                Channel.entries.forEach { channel ->
+                Channel.entries.forEachIndexed { index, channel ->
                     val channelInstalled = installedMap[channel] == true
-                    ServerRow(
-                        channel = channel,
-                        installed = channelInstalled,
-                        selected = vm.channel == channel,
-                        stateLabel = when {
-                            !channelInstalled -> strings.notInstalled
-                            vm.channel == channel -> configStateText
-                            else -> strings.installed
-                        },
-                        onSelect = {
-                            if (!channelInstalled) {
-                                sheetMessage = strings.notInstalledCannotSelect
-                            } else {
-                                sheetMessage = null
-                                vm.selectChannel(channel)
-                                showServerSheet = false
-                            }
-                        },
-                    )
+                    // 底栏列表逐项上浮入场，避免整列同时砸下来
+                    Stagger(index) {
+                        ServerRow(
+                            channel = channel,
+                            installed = channelInstalled,
+                            selected = vm.channel == channel,
+                            stateLabel = when {
+                                !channelInstalled -> strings.notInstalled
+                                vm.channel == channel -> configStateText
+                                else -> strings.installed
+                            },
+                            onSelect = {
+                                if (!channelInstalled) {
+                                    sheetMessage = strings.notInstalledCannotSelect
+                                } else {
+                                    sheetMessage = null
+                                    vm.selectChannel(channel)
+                                    showServerSheet = false
+                                }
+                            },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -595,7 +800,7 @@ private fun ParamRow(
     enabled: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
-    onHelp: () -> Unit,
+    onHelp: (() -> Unit)?,
     editor: @Composable () -> Unit,
 ) {
     val dimens = LocalNteDimens.current
@@ -630,7 +835,7 @@ private fun ParamRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(title, style = MaterialTheme.typography.bodyLarge)
-                    HelpDot(onHelp)
+                    if (onHelp != null) HelpDot(onHelp)
                 }
             }
             Text(
@@ -664,7 +869,7 @@ private fun SwitchRow(
     checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    onHelp: () -> Unit,
+    onHelp: (() -> Unit)?,
 ) {
     val dimens = LocalNteDimens.current
     Row(
@@ -680,7 +885,7 @@ private fun SwitchRow(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                HelpDot(onHelp)
+                if (onHelp != null) HelpDot(onHelp)
             }
         }
         NteSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
@@ -720,7 +925,12 @@ private fun OptionList(
                     else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                if (isSelected) {
+                // 选中对勾弹入，取消时收回；避免 if 直接增减造成的跳变
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.52f, stiffness = 720f), initialScale = 0.4f),
+                    exit = fadeOut(tween(110)) + scaleOut(tween(130), targetScale = 0.4f),
+                ) {
                     Icon(
                         Icons.Filled.Check,
                         contentDescription = null,

@@ -59,6 +59,7 @@ class AppPrefs(private val context: Context) {
         val CHANNEL = stringPreferencesKey("selected_channel")
         val API = stringPreferencesKey("api_base_url")
         val DEVICE_UID = stringPreferencesKey("device_uid")
+        val SEEN_ANNOUNCEMENT = stringPreferencesKey("seen_announcement_id")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -133,6 +134,14 @@ class AppPrefs(private val context: Context) {
         val fresh = UUID.randomUUID().toString()
         edit { it[Keys.DEVICE_UID] = fresh }
         return fresh
+    }
+
+    /** 已读公告 ID：持久化后同一条公告只弹一次，重启不再打扰。 */
+    suspend fun seenAnnouncementId(): String? =
+        context.dataStore.data.first()[Keys.SEEN_ANNOUNCEMENT]
+
+    suspend fun markAnnouncementSeen(id: String) {
+        edit { it[Keys.SEEN_ANNOUNCEMENT] = id }
     }
 
     private fun digestUid(raw: String): String {
